@@ -633,15 +633,6 @@ fn main() {
                 },
             )
             .unwrap();
-        cx.observe_keystrokes(move |ev, cx| {
-            window
-                .update(cx, |view, cx| {
-                    view.recent_keystrokes.push(ev.keystroke.clone());
-                    cx.notify();
-                })
-                .unwrap();
-        })
-        .detach();
         window
             .update(cx, |view, cx| {
                 cx.focus_view(&view.text_input);
