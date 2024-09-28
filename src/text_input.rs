@@ -314,14 +314,14 @@ impl TextInput {
             .unwrap_or(self.content[self.content_idx].len())
     }
 
-    fn add_word_to_start_of_next_line(&mut self, word: &str, cx: &mut ViewContext<Self>) {
-        if self.content.len() <= self.content_idx + 1 {
+    fn add_word_to_start_of_line(&mut self, word: &str, line: usize, cx: &mut ViewContext<Self>) {
+        if self.content.len() <= line {
             self.new_line("".into(), cx);
         }
 
-        let new_content = word.to_owned() + " " + &self.content[self.content_idx + 1];
+        let new_content = word.to_owned() + " " + &self.content[line];
 
-        self.content[self.content_idx + 1] = new_content.into();
+        self.content[line] = new_content.into();
     }
 
     fn replace_text_in_range_without_moving(
@@ -363,7 +363,7 @@ impl TextInput {
             if content.clone().count() > 1 {
                 let last_word = content.last().unwrap();
 
-                self.add_word_to_start_of_next_line(last_word, cx);
+                self.add_word_to_start_of_line(last_word, self.content_idx + 1, cx);
                 self.replace_text_in_range_without_moving(
                     Some(content_string.len() - last_word.len() - 1..content_string.len()),
                     "",
