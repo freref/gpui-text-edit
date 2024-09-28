@@ -315,11 +315,11 @@ impl TextInput {
     }
 
     fn add_word_to_start_of_next_line(&mut self, word: &str, cx: &mut ViewContext<Self>) {
-        if self.content.len() > self.content_idx {
+        if self.content.len() <= self.content_idx + 1 {
             self.new_line("".into(), cx);
         }
 
-        let new_content = word.to_owned() + &self.content[self.content_idx + 1];
+        let new_content = word.to_owned() + " " + &self.content[self.content_idx + 1];
 
         self.content[self.content_idx + 1] = new_content.into();
     }
@@ -341,7 +341,6 @@ impl TextInput {
             + new_text
             + &self.content[self.content_idx][range.end..])
             .into();
-        //self.selected_range = range.start + new_text.len()..range.start + new_text.len();
         self.marked_range.take();
         cx.notify();
     }
@@ -359,21 +358,25 @@ impl TextInput {
 
         if pixels > width {
             let content_string = self.content[self.content_idx].to_string();
-            let content = content_string.split_whitespace();
+            let content = content_string.split(" ");
 
             if content.clone().count() > 1 {
                 let last_word = content.last().unwrap();
-                println!("last word: {}", last_word);
+
                 self.add_word_to_start_of_next_line(last_word, cx);
                 self.replace_text_in_range_without_moving(
                     Some(content_string.len() - last_word.len() - 1..content_string.len()),
                     "",
                     cx,
                 );
+
+                if self.selected_range.start >= content_string.len() - last_word.len() {
+                    self.content_idx += 1;
+                    self.selected_range = last_word.len()..last_word.len();
+                }
                 return;
             }
-
-            self.enter(&Enter, cx);
+            self.enter(&Enter, cx)
         }
     }
 }
@@ -421,8 +424,6 @@ impl ViewInputHandler for TextInput {
         new_text: &str,
         cx: &mut ViewContext<Self>,
     ) {
-        self.check_bounds(cx);
-
         let range = range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
@@ -436,6 +437,9 @@ impl ViewInputHandler for TextInput {
             .into();
         self.selected_range = range.start + new_text.len()..range.start + new_text.len();
         self.marked_range.take();
+
+        self.check_bounds(cx);
+
         cx.notify();
     }
 
