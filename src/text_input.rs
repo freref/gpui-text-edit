@@ -78,16 +78,24 @@ impl TextInput {
     }
 
     pub fn select_left(&mut self, _: &SelectLeft, cx: &mut ViewContext<Self>) {
-        self.select_to(self.previous_boundary(self.cursor_offset()), cx);
+        self.select_to(
+            self.previous_boundary(self.cursor_offset()),
+            self.content_idx,
+            cx,
+        );
     }
 
     pub fn select_right(&mut self, _: &SelectRight, cx: &mut ViewContext<Self>) {
-        self.select_to(self.next_boundary(self.cursor_offset()), cx);
+        self.select_to(
+            self.next_boundary(self.cursor_offset()),
+            self.content_idx,
+            cx,
+        );
     }
 
     pub fn select_all(&mut self, _: &SelectAll, cx: &mut ViewContext<Self>) {
         self.move_x(0, cx);
-        self.select_to(self.content.len(), cx)
+        self.select_to(self.content.len(), self.content_idx, cx)
     }
 
     pub fn home(&mut self, _: &Home, cx: &mut ViewContext<Self>) {
@@ -99,20 +107,26 @@ impl TextInput {
     }
 
     pub fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
-        if self.cursor_offset() == 0 && self.content_idx > 0 {
-            let current_content = self.content[self.content_idx].clone();
-            let previous_content = self.content[self.content_idx - 1].clone();
+        if self.selected_range.is_empty() {
+            if self.cursor_offset() == 0 && self.content_idx > 0 {
+                let current_content = self.content[self.content_idx].clone();
+                let previous_content = self.content[self.content_idx - 1].clone();
 
-            self.move_x(previous_content.len(), cx);
+                self.move_x(previous_content.len(), cx);
 
-            let merged_content = previous_content.to_string() + &current_content;
-            self.content[self.content_idx - 1] = merged_content.into();
+                let merged_content = previous_content.to_string() + &current_content;
+                self.content[self.content_idx - 1] = merged_content.into();
 
-            self.content.remove(self.content_idx);
+                self.content.remove(self.content_idx);
 
-            self.move_up(cx);
-        } else if self.selected_range.is_empty() {
-            self.select_to(self.previous_boundary(self.cursor_offset()), cx);
+                self.move_up(cx);
+                return;
+            }
+            self.select_to(
+                self.previous_boundary(self.cursor_offset()),
+                self.content_idx,
+                cx,
+            );
         }
 
         self.replace_text_in_range(None, "", cx);
@@ -120,7 +134,11 @@ impl TextInput {
 
     pub fn delete(&mut self, _: &Delete, cx: &mut ViewContext<Self>) {
         if self.selected_range.is_empty() {
-            self.select_to(self.next_boundary(self.cursor_offset()), cx)
+            self.select_to(
+                self.next_boundary(self.cursor_offset()),
+                self.content_idx,
+                cx,
+            )
         }
         self.replace_text_in_range(None, "", cx)
     }
@@ -129,7 +147,11 @@ impl TextInput {
         self.is_selecting = true;
 
         if event.modifiers.shift {
-            self.select_to(self.index_for_mouse_position(event.position), cx);
+            self.select_to(
+                self.index_for_mouse_position(event.position),
+                self.content_idx,
+                cx,
+            );
         } else {
             self.move_x(self.index_for_mouse_position(event.position), cx)
         }
@@ -141,7 +163,11 @@ impl TextInput {
 
     pub fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut ViewContext<Self>) {
         if self.is_selecting {
-            self.select_to(self.index_for_mouse_position(event.position), cx);
+            self.select_to(
+                self.index_for_mouse_position(event.position),
+                self.content_idx,
+                cx,
+            );
         }
     }
 
@@ -223,11 +249,11 @@ impl TextInput {
         line.closest_index_for_x(position.x - bounds.left())
     }
 
-    fn select_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
+    fn select_to(&mut self, x_offset: usize, _y_offset: usize, cx: &mut ViewContext<Self>) {
         if self.selection_reversed {
-            self.selected_range.start = offset
+            self.selected_range.start = x_offset
         } else {
-            self.selected_range.end = offset
+            self.selected_range.end = x_offset
         };
         if self.selected_range.end < self.selected_range.start {
             self.selection_reversed = !self.selection_reversed;
@@ -401,7 +427,7 @@ impl ViewInputHandler for TextInput {
 impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
-            .p(px(4.))
+            .p(px(40.))
             .flex()
             .key_context("TextInput")
             .track_focus(&self.focus_handle)
