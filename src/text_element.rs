@@ -3,6 +3,7 @@ use gpui::*;
 
 pub struct TextElement {
     pub input: View<TextInput>,
+    pub index: usize,
 }
 
 impl IntoElement for TextElement {
@@ -52,7 +53,7 @@ impl Element for TextElement {
         let cursor = input.cursor_offset();
         let style = cx.text_style();
 
-        let (display_text, text_color) = (content.clone(), style.color);
+        let (display_text, text_color) = (content[self.index].clone(), style.color);
 
         let run = TextRun {
             len: display_text.len(),
@@ -96,7 +97,7 @@ impl Element for TextElement {
             .unwrap();
 
         let cursor_pos = line.x_for_index(cursor);
-        let (selection, cursor) = if selected_range.is_empty() {
+        let (selection, cursor) = if selected_range.is_empty() && self.index == input.content_idx {
             (
                 None,
                 Some(fill(
@@ -107,7 +108,7 @@ impl Element for TextElement {
                     gpui::blue(),
                 )),
             )
-        } else {
+        } else if self.index == input.content_idx {
             (
                 Some(fill(
                     Bounds::from_corners(
@@ -124,6 +125,8 @@ impl Element for TextElement {
                 )),
                 None,
             )
+        } else {
+            (None, None)
         };
         PrepaintState {
             line: Some(line),

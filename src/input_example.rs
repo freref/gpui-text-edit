@@ -18,5 +18,6 @@ impl Render for InputExample {
             .track_focus(&self.focus_handle)
             .child(self.text_input.clone())
             .size_full()
+            .bg(white())
     }
 }

@@ -35,7 +35,8 @@ fn main() {
                 |cx| {
                     let text_input = cx.new_view(|cx| TextInput {
                         focus_handle: cx.focus_handle(),
-                        content: "".into(),
+                        content: vec!["".into()],
+                        content_idx: 0,
                         selected_range: 0..0,
                         selection_reversed: false,
                         marked_range: None,
