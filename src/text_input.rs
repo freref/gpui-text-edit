@@ -185,17 +185,14 @@ impl TextInput {
 
         let new_content = self.content[self.content_idx][..self.cursor_offset()].to_string();
         self.content[self.content_idx] = new_content.into();
-
-        self.content.insert(self.content_idx + 1, leftovers.into());
-
-        self.selection_reversed = false;
-        self.marked_range = None;
-        self.last_layout = None;
-        self.last_bounds = None;
-        self.is_selecting = false;
+        self.new_line(leftovers, cx);
 
         self.move_down(cx);
         self.cursor_to_start(cx);
+    }
+
+    pub fn new_line(&mut self, data: String, _cx: &mut ViewContext<Self>) {
+        self.content.insert(self.content_idx + 1, data.into());
     }
 
     fn move_x(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
@@ -317,32 +314,62 @@ impl TextInput {
             .unwrap_or(self.content[self.content_idx].len())
     }
 
+    fn add_word_to_start_of_next_line(&mut self, word: &str, cx: &mut ViewContext<Self>) {
+        if self.content.len() > self.content_idx {
+            self.new_line("".into(), cx);
+        }
+
+        let new_content = word.to_owned() + &self.content[self.content_idx + 1];
+
+        self.content[self.content_idx + 1] = new_content.into();
+    }
+
+    fn replace_text_in_range_without_moving(
+        &mut self,
+        range_utf16: Option<Range<usize>>,
+        new_text: &str,
+        cx: &mut ViewContext<Self>,
+    ) {
+        let range = range_utf16
+            .as_ref()
+            .map(|range_utf16| self.range_from_utf16(range_utf16))
+            .or(self.marked_range.clone())
+            .unwrap_or(self.selected_range.clone());
+
+        self.content[self.content_idx] = (self.content[self.content_idx][0..range.start]
+            .to_owned()
+            + new_text
+            + &self.content[self.content_idx][range.end..])
+            .into();
+        //self.selected_range = range.start + new_text.len()..range.start + new_text.len();
+        self.marked_range.take();
+        cx.notify();
+    }
+
     fn check_bounds(&mut self, cx: &mut ViewContext<Self>) {
         let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         else {
             return;
         };
 
-        let pixels = line.x_for_index(self.cursor_offset()) + bounds.left();
+        let pixels = line.x_for_index(self.content[self.content_idx].len()) + bounds.left();
         let width = cx.window_bounds().get_bounds().right()
             - cx.window_bounds().get_bounds().left()
             - bounds.right();
 
         if pixels > width {
             let content_string = self.content[self.content_idx].to_string();
-            let content = content_string.split(" ");
+            let content = content_string.split_whitespace();
 
             if content.clone().count() > 1 {
-                if let Some(last_word) = content.last() {
-                    self.select_to(
-                        self.selected_range.end - last_word.len(),
-                        self.content_idx,
-                        cx,
-                    );
-                    self.replace_text_in_range(None, "", cx);
-                    self.enter(&Enter, cx);
-                    self.replace_text_in_range(None, last_word, cx);
-                }
+                let last_word = content.last().unwrap();
+                println!("last word: {}", last_word);
+                self.add_word_to_start_of_next_line(last_word, cx);
+                self.replace_text_in_range_without_moving(
+                    Some(content_string.len() - last_word.len() - 1..content_string.len()),
+                    "",
+                    cx,
+                );
                 return;
             }
 
