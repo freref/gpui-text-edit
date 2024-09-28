@@ -316,6 +316,39 @@ impl TextInput {
             .find_map(|(idx, _)| (idx > offset).then_some(idx))
             .unwrap_or(self.content[self.content_idx].len())
     }
+
+    fn check_bounds(&mut self, cx: &mut ViewContext<Self>) {
+        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
+        else {
+            return;
+        };
+
+        let pixels = line.x_for_index(self.cursor_offset()) + bounds.left();
+        let width = cx.window_bounds().get_bounds().right()
+            - cx.window_bounds().get_bounds().left()
+            - bounds.right();
+
+        if pixels > width {
+            let content_string = self.content[self.content_idx].to_string();
+            let content = content_string.split(" ");
+
+            if content.clone().count() > 1 {
+                if let Some(last_word) = content.last() {
+                    self.select_to(
+                        self.selected_range.end - last_word.len(),
+                        self.content_idx,
+                        cx,
+                    );
+                    self.replace_text_in_range(None, "", cx);
+                    self.enter(&Enter, cx);
+                    self.replace_text_in_range(None, last_word, cx);
+                }
+                return;
+            }
+
+            self.enter(&Enter, cx);
+        }
+    }
 }
 
 impl FocusableView for TextInput {
@@ -361,6 +394,8 @@ impl ViewInputHandler for TextInput {
         new_text: &str,
         cx: &mut ViewContext<Self>,
     ) {
+        self.check_bounds(cx);
+
         let range = range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
@@ -454,6 +489,7 @@ impl Render for TextInput {
             .text_size(px(12.))
             .children(self.content.iter().enumerate().map(|(i, _)| {
                 div().pt(px(20. * i as f32)).child(TextElement {
+                    // XXX TODO no need to pass whole view each time
                     input: cx.view().clone(),
                     index: i,
                 })

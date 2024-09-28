@@ -12,6 +12,12 @@ use text_input::{
 
 fn main() {
     App::new().run(|cx: &mut AppContext| {
+        cx.activate(true);
+        cx.on_action(quit);
+        cx.set_menus(vec![Menu {
+            name: "set_menus".into(),
+            items: vec![MenuItem::action("Quit", Quit)],
+        }]);
         let bounds = Bounds::centered(None, size(px(500.0), px(500.0)), cx);
         cx.bind_keys([
             KeyBinding::new("backspace", Backspace, None),
@@ -60,4 +66,10 @@ fn main() {
             })
             .unwrap();
     });
+}
+
+actions!(set_menus, [Quit]);
+
+fn quit(_: &Quit, cx: &mut AppContext) {
+    cx.quit();
 }
