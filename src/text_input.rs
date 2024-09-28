@@ -47,17 +47,14 @@ impl TextInput {
     }
 
     pub fn right(&mut self, _: &Right, cx: &mut ViewContext<Self>) {
-        if self.content_idx < self.content.len()
+        if self.content_idx < self.content.len() - 1
             && self.cursor_offset() == self.content[self.content_idx].len()
         {
-            println!("1");
             self.move_down(cx);
             self.cursor_to_start(cx);
         } else if self.selected_range.is_empty() {
-            println!("2");
             self.move_x(self.next_boundary(self.cursor_offset()), cx);
         } else {
-            println!("3");
             self.move_x(self.selected_range.end, cx)
         }
     }
@@ -289,7 +286,7 @@ impl TextInput {
         self.content[self.content_idx]
             .grapheme_indices(true)
             .find_map(|(idx, _)| (idx > offset).then_some(idx))
-            .unwrap_or(self.content.len())
+            .unwrap_or(self.content[self.content_idx].len())
     }
 }
 
