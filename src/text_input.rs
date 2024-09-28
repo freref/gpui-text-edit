@@ -16,7 +16,9 @@ actions!(
         Home,
         End,
         ShowCharacterPalette,
-        Enter
+        Enter,
+        Up,
+        Down
     ]
 );
 
@@ -49,6 +51,26 @@ impl TextInput {
         }
     }
 
+    pub fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
+        if self.content_idx > 0 {
+            self.content_idx -= 1;
+            if self.content[self.content_idx].len() < self.selected_range.end {
+                self.cursor_to_end();
+            }
+        }
+        cx.notify()
+    }
+
+    pub fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
+        if self.content.len() - 1 > self.content_idx {
+            self.content_idx += 1;
+            if self.content[self.content_idx].len() < self.selected_range.end {
+                self.cursor_to_end();
+            }
+        }
+        cx.notify()
+    }
+
     pub fn select_left(&mut self, _: &SelectLeft, cx: &mut ViewContext<Self>) {
         self.select_to(self.previous_boundary(self.cursor_offset()), cx);
     }
@@ -73,8 +95,7 @@ impl TextInput {
     pub fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
         if self.cursor_offset() == 0 && self.content_idx > 0 {
             self.content_idx -= 1;
-            self.selected_range =
-                self.content[self.content_idx].len()..self.content[self.content_idx].len()
+            self.cursor_to_end()
         } else if self.selected_range.is_empty() {
             self.select_to(self.previous_boundary(self.cursor_offset()), cx)
         }
@@ -206,6 +227,11 @@ impl TextInput {
 
     pub fn range_from_utf16(&self, range_utf16: &Range<usize>) -> Range<usize> {
         self.offset_from_utf16(range_utf16.start)..self.offset_from_utf16(range_utf16.end)
+    }
+
+    pub fn cursor_to_end(&mut self) {
+        let length = self.content[self.content_idx].len();
+        self.selected_range = length..length;
     }
 
     fn previous_boundary(&self, offset: usize) -> usize {
@@ -351,6 +377,8 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::end))
             .on_action(cx.listener(Self::show_character_palette))
             .on_action(cx.listener(Self::enter))
+            .on_action(cx.listener(Self::up))
+            .on_action(cx.listener(Self::down))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))

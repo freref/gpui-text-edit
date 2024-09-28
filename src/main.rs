@@ -6,8 +6,8 @@ use gpui::*;
 use input_example::InputExample;
 use text_input::TextInput;
 use text_input::{
-    Backspace, Delete, End, Enter, Home, Left, Right, SelectAll, SelectLeft, SelectRight,
-    ShowCharacterPalette,
+    Backspace, Delete, Down, End, Enter, Home, Left, Right, SelectAll, SelectLeft, SelectRight,
+    ShowCharacterPalette, Up,
 };
 
 fn main() {
@@ -25,6 +25,8 @@ fn main() {
             KeyBinding::new("end", End, None),
             KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
             KeyBinding::new("enter", Enter, None),
+            KeyBinding::new("up", Up, None),
+            KeyBinding::new("down", Down, None),
         ]);
         let window = cx
             .open_window(
