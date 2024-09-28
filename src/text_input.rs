@@ -36,7 +36,10 @@ pub struct TextInput {
 
 impl TextInput {
     pub fn left(&mut self, _: &Left, cx: &mut ViewContext<Self>) {
-        if self.selected_range.is_empty() {
+        if self.content_idx > 0 && self.selected_range.start == 0 {
+            self.move_up(cx);
+            self.cursor_to_end(cx);
+        } else if self.selected_range.is_empty() {
             self.move_x(self.previous_boundary(self.cursor_offset()), cx);
         } else {
             self.move_x(self.selected_range.start, cx)
@@ -44,7 +47,12 @@ impl TextInput {
     }
 
     pub fn right(&mut self, _: &Right, cx: &mut ViewContext<Self>) {
-        if self.selected_range.is_empty() {
+        if self.content_idx < self.content.len() - 1
+            && self.selected_range.end == self.content[self.content_idx].len()
+        {
+            self.move_down(cx);
+            self.cursor_to_start(cx);
+        } else if self.selected_range.is_empty() {
             self.move_x(self.next_boundary(self.selected_range.end), cx);
         } else {
             self.move_x(self.selected_range.end, cx)
@@ -53,22 +61,20 @@ impl TextInput {
 
     pub fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
         if self.content_idx > 0 {
-            self.content_idx -= 1;
+            self.move_up(cx);
             if self.content[self.content_idx].len() < self.selected_range.end {
-                self.cursor_to_end();
+                self.cursor_to_end(cx);
             }
         }
-        cx.notify()
     }
 
     pub fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
         if self.content.len() - 1 > self.content_idx {
-            self.content_idx += 1;
+            self.move_down(cx);
             if self.content[self.content_idx].len() < self.selected_range.end {
-                self.cursor_to_end();
+                self.cursor_to_end(cx);
             }
         }
-        cx.notify()
     }
 
     pub fn select_left(&mut self, _: &SelectLeft, cx: &mut ViewContext<Self>) {
@@ -94,8 +100,8 @@ impl TextInput {
 
     pub fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
         if self.cursor_offset() == 0 && self.content_idx > 0 {
-            self.content_idx -= 1;
-            self.cursor_to_end()
+            self.move_up(cx);
+            self.cursor_to_end(cx)
         } else if self.selected_range.is_empty() {
             self.select_to(self.previous_boundary(self.cursor_offset()), cx)
         }
@@ -135,21 +141,47 @@ impl TextInput {
     }
 
     pub fn enter(&mut self, _: &Enter, cx: &mut ViewContext<Self>) {
-        self.content_idx += 1;
-        self.selected_range = 0..0;
+        let leftovers = self.content[self.content_idx]
+            [self.selected_range.end..self.content[self.content_idx].len()]
+            .to_string();
+
+        let new_content = self.content[self.content_idx][..self.selected_range.end].to_string();
+        self.content[self.content_idx] = new_content.into();
+
+        self.content.push(leftovers.into());
+
         self.selection_reversed = false;
         self.marked_range = None;
         self.last_layout = None;
         self.last_bounds = None;
         self.is_selecting = false;
 
-        self.content.push("".into());
-        cx.notify();
+        self.move_down(cx);
+        self.cursor_to_start(cx);
     }
 
     fn move_x(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         cx.notify()
+    }
+
+    fn move_up(&mut self, cx: &mut ViewContext<Self>) {
+        self.content_idx -= 1;
+        cx.notify();
+    }
+
+    fn move_down(&mut self, cx: &mut ViewContext<Self>) {
+        self.content_idx += 1;
+        cx.notify();
+    }
+
+    pub fn cursor_to_end(&mut self, cx: &mut ViewContext<Self>) {
+        let length = self.content[self.content_idx].len();
+        self.move_x(length, cx);
+    }
+
+    pub fn cursor_to_start(&mut self, cx: &mut ViewContext<Self>) {
+        self.move_x(0, cx);
     }
 
     pub fn cursor_offset(&self) -> usize {
@@ -227,11 +259,6 @@ impl TextInput {
 
     pub fn range_from_utf16(&self, range_utf16: &Range<usize>) -> Range<usize> {
         self.offset_from_utf16(range_utf16.start)..self.offset_from_utf16(range_utf16.end)
-    }
-
-    pub fn cursor_to_end(&mut self) {
-        let length = self.content[self.content_idx].len();
-        self.selected_range = length..length;
     }
 
     fn previous_boundary(&self, offset: usize) -> usize {
