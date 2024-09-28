@@ -1,3 +1,4 @@
+use crate::text_element::TextElement;
 use gpui::*;
 use std::ops::Range;
 use unicode_segmentation::*;
@@ -15,6 +16,7 @@ actions!(
         Home,
         End,
         ShowCharacterPalette,
+        Enter
     ]
 );
 
@@ -103,6 +105,10 @@ impl TextInput {
 
     pub fn show_character_palette(&mut self, _: &ShowCharacterPalette, cx: &mut ViewContext<Self>) {
         cx.show_character_palette();
+    }
+
+    pub fn enter(&mut self, _: &Enter, _cx: &mut ViewContext<Self>) {
+        println!("enter");
     }
 
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
@@ -304,5 +310,42 @@ impl ViewInputHandler for TextInput {
                 bounds.bottom(),
             ),
         ))
+    }
+}
+
+impl Render for TextInput {
+    fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+        div()
+            .flex()
+            .key_context("TextInput")
+            .track_focus(&self.focus_handle)
+            .cursor(CursorStyle::IBeam)
+            .on_action(cx.listener(Self::backspace))
+            .on_action(cx.listener(Self::delete))
+            .on_action(cx.listener(Self::left))
+            .on_action(cx.listener(Self::right))
+            .on_action(cx.listener(Self::select_left))
+            .on_action(cx.listener(Self::select_right))
+            .on_action(cx.listener(Self::select_all))
+            .on_action(cx.listener(Self::home))
+            .on_action(cx.listener(Self::end))
+            .on_action(cx.listener(Self::show_character_palette))
+            .on_action(cx.listener(Self::enter))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .line_height(px(15.))
+            .text_size(px(12.))
+            .child(
+                div()
+                    .h_full()
+                    .w_full()
+                    .p(px(4.))
+                    .bg(white())
+                    .child(TextElement {
+                        input: cx.view().clone(),
+                    }),
+            )
     }
 }
