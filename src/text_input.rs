@@ -147,12 +147,12 @@ impl TextInput {
 
         if event.modifiers.shift {
             self.select_to(
-                self.index_for_mouse_position(event.position),
-                self.content_idx,
+                self.index_for_mouse_position(event.position).0,
+                self.index_for_mouse_position(event.position).1,
                 cx,
             );
         } else {
-            self.move_x(self.index_for_mouse_position(event.position), cx)
+            self.move_x(self.index_for_mouse_position(event.position).0, cx)
         }
     }
 
@@ -163,8 +163,8 @@ impl TextInput {
     pub fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut ViewContext<Self>) {
         if self.is_selecting {
             self.select_to(
-                self.index_for_mouse_position(event.position),
-                self.content_idx,
+                self.index_for_mouse_position(event.position).0,
+                self.index_for_mouse_position(event.position).1,
                 cx,
             );
         }
@@ -230,22 +230,25 @@ impl TextInput {
         }
     }
 
-    fn index_for_mouse_position(&self, position: Point<Pixels>) -> usize {
+    fn index_for_mouse_position(&self, position: Point<Pixels>) -> (usize, usize) {
         if self.content[self.content_idx].is_empty() {
-            return 0;
+            return (0, self.content_idx);
         }
 
         let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         else {
-            return 0;
+            return (0, self.content_idx);
         };
         if position.y < bounds.top() {
-            return 0;
+            return (0, self.content_idx);
         }
         if position.y > bounds.bottom() {
-            return self.content.len();
+            return (self.content.len(), self.content_idx);
         }
-        line.closest_index_for_x(position.x - bounds.left())
+        (
+            line.closest_index_for_x(position.x - bounds.left()),
+            self.content_idx,
+        )
     }
 
     fn select_to(&mut self, x_offset: usize, _y_offset: usize, cx: &mut ViewContext<Self>) {
