@@ -71,9 +71,14 @@ impl TextInput {
     }
 
     pub fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
-        if self.selected_range.is_empty() {
+        if self.cursor_offset() == 0 && self.content_idx > 0 {
+            self.content_idx -= 1;
+            self.selected_range =
+                self.content[self.content_idx].len()..self.content[self.content_idx].len()
+        } else if self.selected_range.is_empty() {
             self.select_to(self.previous_boundary(self.cursor_offset()), cx)
         }
+
         self.replace_text_in_range(None, "", cx)
     }
 
@@ -108,7 +113,7 @@ impl TextInput {
         cx.show_character_palette();
     }
 
-    pub fn enter(&mut self, _: &Enter, _cx: &mut ViewContext<Self>) {
+    pub fn enter(&mut self, _: &Enter, cx: &mut ViewContext<Self>) {
         self.content_idx += 1;
         self.selected_range = 0..0;
         self.selection_reversed = false;
@@ -118,6 +123,7 @@ impl TextInput {
         self.is_selecting = false;
 
         self.content.push("".into());
+        cx.notify();
     }
 
     fn move_x(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
