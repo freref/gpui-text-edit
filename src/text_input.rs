@@ -120,12 +120,13 @@ impl TextInput {
                 self.content.remove(self.content_idx);
 
                 self.move_up(cx)
+            } else {
+                self.select_to(
+                    self.previous_boundary(self.cursor_offset()),
+                    self.content_idx,
+                    cx,
+                );
             }
-            self.select_to(
-                self.previous_boundary(self.cursor_offset()),
-                self.content_idx,
-                cx,
-            );
         }
 
         self.replace_text_in_range(None, "", cx);
@@ -319,9 +320,13 @@ impl TextInput {
             self.new_line("".into(), cx);
         }
 
-        let new_content = word.to_owned() + " " + &self.content[line];
+        let new_content = if self.content[line].len() > 0 {
+            word.to_owned() + " " + &self.content[line]
+        } else {
+            word.to_owned() + &self.content[line]
+        };
 
-        self.content[line] = new_content.into();
+        self.content[line] = new_content.into(); // Use the appropriate constructor or assignment
     }
 
     fn replace_text_in_range_without_moving(
