@@ -100,13 +100,22 @@ impl TextInput {
 
     pub fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
         if self.cursor_offset() == 0 && self.content_idx > 0 {
+            let current_content = self.content[self.content_idx].clone();
+            let previous_content = self.content[self.content_idx - 1].clone();
+
+            self.move_x(previous_content.len(), cx);
+
+            let merged_content = previous_content.to_string() + &current_content;
+            self.content[self.content_idx - 1] = merged_content.into();
+
+            self.content.remove(self.content_idx);
+
             self.move_up(cx);
-            self.cursor_to_end(cx)
         } else if self.selected_range.is_empty() {
-            self.select_to(self.previous_boundary(self.cursor_offset()), cx)
+            self.select_to(self.previous_boundary(self.cursor_offset()), cx);
         }
 
-        self.replace_text_in_range(None, "", cx)
+        self.replace_text_in_range(None, "", cx);
     }
 
     pub fn delete(&mut self, _: &Delete, cx: &mut ViewContext<Self>) {
