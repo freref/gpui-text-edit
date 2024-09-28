@@ -119,8 +119,7 @@ impl TextInput {
 
                 self.content.remove(self.content_idx);
 
-                self.move_up(cx);
-                return;
+                self.move_up(cx)
             }
             self.select_to(
                 self.previous_boundary(self.cursor_offset()),
@@ -232,7 +231,7 @@ impl TextInput {
     }
 
     fn index_for_mouse_position(&self, position: Point<Pixels>) -> usize {
-        if self.content.is_empty() {
+        if self.content[self.content_idx].is_empty() {
             return 0;
         }
 
