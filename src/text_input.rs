@@ -36,7 +36,7 @@ pub struct TextInput {
 
 impl TextInput {
     pub fn left(&mut self, _: &Left, cx: &mut ViewContext<Self>) {
-        if self.content_idx > 0 && self.selected_range.start == 0 {
+        if self.content_idx > 0 && self.cursor_offset() == 0 {
             self.move_up(cx);
             self.cursor_to_end(cx);
         } else if self.selected_range.is_empty() {
@@ -47,14 +47,17 @@ impl TextInput {
     }
 
     pub fn right(&mut self, _: &Right, cx: &mut ViewContext<Self>) {
-        if self.content_idx < self.content.len() - 1
-            && self.selected_range.end == self.content[self.content_idx].len()
+        if self.content_idx < self.content.len()
+            && self.cursor_offset() == self.content[self.content_idx].len()
         {
+            println!("1");
             self.move_down(cx);
             self.cursor_to_start(cx);
         } else if self.selected_range.is_empty() {
-            self.move_x(self.next_boundary(self.selected_range.end), cx);
+            println!("2");
+            self.move_x(self.next_boundary(self.cursor_offset()), cx);
         } else {
+            println!("3");
             self.move_x(self.selected_range.end, cx)
         }
     }
@@ -62,7 +65,7 @@ impl TextInput {
     pub fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
         if self.content_idx > 0 {
             self.move_up(cx);
-            if self.content[self.content_idx].len() < self.selected_range.end {
+            if self.content[self.content_idx].len() < self.cursor_offset() {
                 self.cursor_to_end(cx);
             }
         }
@@ -71,7 +74,7 @@ impl TextInput {
     pub fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
         if self.content.len() - 1 > self.content_idx {
             self.move_down(cx);
-            if self.content[self.content_idx].len() < self.selected_range.end {
+            if self.content[self.content_idx].len() < self.cursor_offset() {
                 self.cursor_to_end(cx);
             }
         }
@@ -150,14 +153,18 @@ impl TextInput {
     }
 
     pub fn enter(&mut self, _: &Enter, cx: &mut ViewContext<Self>) {
-        let leftovers = self.content[self.content_idx]
-            [self.selected_range.end..self.content[self.content_idx].len()]
-            .to_string();
+        let leftovers = if self.content[self.content_idx].len() > 0 {
+            self.content[self.content_idx]
+                [self.cursor_offset()..self.content[self.content_idx].len()]
+                .to_string()
+        } else {
+            "".to_string()
+        };
 
-        let new_content = self.content[self.content_idx][..self.selected_range.end].to_string();
+        let new_content = self.content[self.content_idx][..self.cursor_offset()].to_string();
         self.content[self.content_idx] = new_content.into();
 
-        self.content.push(leftovers.into());
+        self.content.insert(self.content_idx + 1, leftovers.into());
 
         self.selection_reversed = false;
         self.marked_range = None;
