@@ -377,7 +377,8 @@ impl TextInput {
 
                 if self.selected_range.start >= content_string.len() - last_word.len() {
                     self.content_idx += 1;
-                    self.selected_range = last_word.len()..last_word.len();
+                    let pos = last_word.len() - (content_string.len() - self.selected_range.start);
+                    self.selected_range = pos..pos;
                 }
                 return;
             }
