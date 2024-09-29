@@ -153,7 +153,9 @@ impl TextInput {
                 cx,
             );
         } else {
-            self.move_x(self.index_for_mouse_position(event.position).0, cx)
+            let pos = self.index_for_mouse_position(event.position);
+            self.move_x(pos.0, cx);
+            self.move_y(pos.1, cx);
         }
     }
 
@@ -201,6 +203,11 @@ impl TextInput {
         cx.notify()
     }
 
+    fn move_y(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
+        self.content_idx = offset;
+        cx.notify();
+    }
+
     fn move_up(&mut self, cx: &mut ViewContext<Self>) {
         self.content_idx -= 1;
         cx.notify();
@@ -229,24 +236,15 @@ impl TextInput {
     }
 
     fn index_for_mouse_position(&self, position: Point<Pixels>) -> (usize, usize) {
-        if self.content[self.content_idx].is_empty() {
-            return (0, self.content_idx);
-        }
+        let mut index = ((position.y.0 + 4.) / 14. - 1.).floor() as usize;
+        index = index.min(self.content.len() - 1);
 
         let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         else {
-            return (0, self.content_idx);
+            return (0, index);
         };
-        if position.y < bounds.top() {
-            return (0, self.content_idx);
-        }
-        if position.y > bounds.bottom() {
-            return (self.content.len(), self.content_idx);
-        }
-        (
-            line.closest_index_for_x(position.x - bounds.left()),
-            self.content_idx,
-        )
+
+        (line.closest_index_for_x(position.x - bounds.left()), index)
     }
 
     fn select_to(&mut self, x_offset: usize, _y_offset: usize, cx: &mut ViewContext<Self>) {
@@ -326,7 +324,7 @@ impl TextInput {
             word.to_owned() + &self.content[line]
         };
 
-        self.content[line] = new_content.into(); // Use the appropriate constructor or assignment
+        self.content[line] = new_content.into();
     }
 
     fn replace_text_in_range_without_moving(
@@ -356,12 +354,13 @@ impl TextInput {
             return;
         };
 
-        let pixels = line.x_for_index(self.content[self.content_idx].len()) + bounds.left();
+        let pixels =
+            line.x_for_index(self.content[self.content_idx].len()) + bounds.left() + bounds.right();
         let width = cx.window_bounds().get_bounds().right()
             - cx.window_bounds().get_bounds().left()
             - bounds.right();
 
-        if pixels > width {
+        if pixels >= width {
             let content_string = self.content[self.content_idx].to_string();
             let content = content_string.split(" ");
 
@@ -501,7 +500,7 @@ impl ViewInputHandler for TextInput {
 impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
-            .p(px(40.))
+            .p(px(4.))
             .flex()
             .key_context("TextInput")
             .track_focus(&self.focus_handle)
@@ -525,8 +524,7 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .text_size(px(12.))
             .children(self.content.iter().enumerate().map(|(i, _)| {
-                div().pt(px(20. * i as f32)).child(TextElement {
-                    // XXX TODO no need to pass whole view each time
+                div().pt(px(14. * i as f32)).child(TextElement {
                     input: cx.view().clone(),
                     index: i,
                 })

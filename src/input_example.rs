@@ -15,9 +15,12 @@ impl FocusableView for InputExample {
 impl Render for InputExample {
     fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
+            .size_full()
             .track_focus(&self.focus_handle)
             .child(self.text_input.clone())
             .size_full()
             .bg(white())
+            .cursor(CursorStyle::IBeam)
+            .h_full()
     }
 }
