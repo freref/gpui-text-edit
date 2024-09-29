@@ -236,15 +236,17 @@ impl TextInput {
     }
 
     fn index_for_mouse_position(&self, position: Point<Pixels>) -> (usize, usize) {
-        let mut index = ((position.y.0 + 4.) / 14. - 1.).floor() as usize;
-        index = index.min(self.content.len() - 1);
+        let mut y = ((position.y.0 + 4.) / 14. - 1.).floor() as usize;
+        y = y.min(self.content.len() - 1);
 
         let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         else {
-            return (0, index);
+            return (0, y);
         };
 
-        (line.closest_index_for_x(position.x - bounds.left()), index)
+        let mut x = (line.closest_index_for_x(position.x - bounds.left()));
+        x = x.min(self.content[y].len());
+        (x, y)
     }
 
     fn select_to(&mut self, x_offset: usize, _y_offset: usize, cx: &mut ViewContext<Self>) {
