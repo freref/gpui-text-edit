@@ -354,9 +354,6 @@ impl TextInput {
 
         self.content[index].content = new_content.into();
 
-        self.update_layout(index, cx);
-        self.check_bounds(index, cx);
-
         cx.notify();
     }
 
@@ -469,9 +466,9 @@ impl TextInput {
 
             println!("{}", leftovers);
 
-            self.new_line(leftovers.into(), index + 1, cx);
+            self.add_word_to_start_of_line(leftovers, index + 1, cx);
             self.replace_text_in_range_without_moving(
-                Some(last_index..content_string.len()),
+                Some(last_index - 1..content_string.len()),
                 index,
                 "",
                 cx,
@@ -482,8 +479,10 @@ impl TextInput {
             {
                 self.content_idx += 1;
                 let pos = len;
-                self.content[index + 1].selected_range = pos..pos;
+                self.content[self.content_idx].selected_range = pos..pos;
             }
+
+            self.check_bounds(index + 1, cx);
         }
     }
 }
