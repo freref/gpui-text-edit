@@ -22,10 +22,8 @@ actions!(
     ]
 );
 
-pub struct TextInput {
-    pub focus_handle: FocusHandle,
-    pub content: Vec<SharedString>,
-    pub content_idx: usize,
+pub struct TextLine {
+    pub content: SharedString,
     pub selected_range: Range<usize>,
     pub selection_reversed: bool,
     pub marked_range: Option<Range<usize>>,
@@ -34,35 +32,41 @@ pub struct TextInput {
     pub is_selecting: bool,
 }
 
+pub struct TextInput {
+    pub focus_handle: FocusHandle,
+    pub content: Vec<TextLine>,
+    pub content_idx: usize,
+}
+
 impl TextInput {
     pub fn left(&mut self, _: &Left, cx: &mut ViewContext<Self>) {
         if self.content_idx > 0 && self.cursor_offset() == 0 {
             self.move_up(cx);
             self.cursor_to_end(cx);
-        } else if self.selected_range.is_empty() {
+        } else if self.content[self.content_idx].selected_range.is_empty() {
             self.move_x(self.previous_boundary(self.cursor_offset()), cx);
         } else {
-            self.move_x(self.selected_range.start, cx)
+            self.move_x(self.content[self.content_idx].selected_range.start, cx)
         }
     }
 
     pub fn right(&mut self, _: &Right, cx: &mut ViewContext<Self>) {
         if self.content_idx < self.content.len() - 1
-            && self.cursor_offset() == self.content[self.content_idx].len()
+            && self.cursor_offset() == self.content[self.content_idx].content.len()
         {
             self.move_down(cx);
             self.cursor_to_start(cx);
-        } else if self.selected_range.is_empty() {
+        } else if self.content[self.content_idx].selected_range.is_empty() {
             self.move_x(self.next_boundary(self.cursor_offset()), cx);
         } else {
-            self.move_x(self.selected_range.end, cx)
+            self.move_x(self.content[self.content_idx].selected_range.end, cx)
         }
     }
 
     pub fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
         if self.content_idx > 0 {
             self.move_up(cx);
-            if self.content[self.content_idx].len() < self.cursor_offset() {
+            if self.content[self.content_idx].content.len() < self.cursor_offset() {
                 self.cursor_to_end(cx);
             }
         }
@@ -71,7 +75,7 @@ impl TextInput {
     pub fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
         if self.content.len() - 1 > self.content_idx {
             self.move_down(cx);
-            if self.content[self.content_idx].len() < self.cursor_offset() {
+            if self.content[self.content_idx].content.len() < self.cursor_offset() {
                 self.cursor_to_end(cx);
             }
         }
@@ -107,15 +111,15 @@ impl TextInput {
     }
 
     pub fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
-        if self.selected_range.is_empty() {
+        if self.content[self.content_idx].selected_range.is_empty() {
             if self.cursor_offset() == 0 && self.content_idx > 0 {
-                let current_content = self.content[self.content_idx].clone();
-                let previous_content = self.content[self.content_idx - 1].clone();
+                let current_content = self.content[self.content_idx].content.clone();
+                let previous_content = self.content[self.content_idx - 1].content.clone();
 
                 self.move_x(previous_content.len(), cx);
 
                 let merged_content = previous_content.to_string() + &current_content;
-                self.content[self.content_idx - 1] = merged_content.into();
+                self.content[self.content_idx - 1].content = merged_content.into();
 
                 self.content.remove(self.content_idx);
 
@@ -133,7 +137,7 @@ impl TextInput {
     }
 
     pub fn delete(&mut self, _: &Delete, cx: &mut ViewContext<Self>) {
-        if self.selected_range.is_empty() {
+        if self.content[self.content_idx].selected_range.is_empty() {
             self.select_to(
                 self.next_boundary(self.cursor_offset()),
                 self.content_idx,
@@ -144,7 +148,7 @@ impl TextInput {
     }
 
     pub fn on_mouse_down(&mut self, event: &MouseDownEvent, cx: &mut ViewContext<Self>) {
-        self.is_selecting = true;
+        self.content[self.content_idx].is_selecting = true;
 
         if event.modifiers.shift {
             self.select_to(
@@ -160,11 +164,11 @@ impl TextInput {
     }
 
     pub fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut ViewContext<Self>) {
-        self.is_selecting = false;
+        self.content[self.content_idx].is_selecting = false;
     }
 
     pub fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut ViewContext<Self>) {
-        if self.is_selecting {
+        if self.content[self.content_idx].is_selecting {
             self.select_to(
                 self.index_for_mouse_position(event.position).0,
                 self.index_for_mouse_position(event.position).1,
@@ -178,16 +182,19 @@ impl TextInput {
     }
 
     pub fn enter(&mut self, _: &Enter, cx: &mut ViewContext<Self>) {
-        let leftovers = if self.content[self.content_idx].len() > 0 {
-            self.content[self.content_idx]
-                [self.cursor_offset()..self.content[self.content_idx].len()]
-                .to_string()
-        } else {
-            "".to_string()
-        };
+        //let leftovers = if self.content[self.content_idx].content.len() > 0 {
+        //    self.content[self.content_idx]
+        //        [self.cursor_offset()..self.content[self.content_idx].len()]
+        //        .to_string()
+        //} else {
+        //    "".to_string()
+        //};
 
-        let new_content = self.content[self.content_idx][..self.cursor_offset()].to_string();
-        self.content[self.content_idx] = new_content.into();
+        let leftovers = "".to_string();
+
+        let new_content =
+            self.content[self.content_idx].content[..self.cursor_offset()].to_string();
+        self.content[self.content_idx].content = new_content.into();
         self.new_line(leftovers, cx);
 
         self.move_down(cx);
@@ -195,11 +202,11 @@ impl TextInput {
     }
 
     pub fn new_line(&mut self, data: String, _cx: &mut ViewContext<Self>) {
-        self.content.insert(self.content_idx + 1, data.into());
+        //self.content.insert(self.content_idx + 1, data.into());
     }
 
     fn move_x(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
-        self.selected_range = offset..offset;
+        self.content[self.content_idx].selected_range = offset..offset;
         cx.notify()
     }
 
@@ -219,7 +226,7 @@ impl TextInput {
     }
 
     pub fn cursor_to_end(&mut self, cx: &mut ViewContext<Self>) {
-        let length = self.content[self.content_idx].len();
+        let length = self.content[self.content_idx].content.len();
         self.move_x(length, cx);
     }
 
@@ -228,10 +235,10 @@ impl TextInput {
     }
 
     pub fn cursor_offset(&self) -> usize {
-        if self.selection_reversed {
-            self.selected_range.start
+        if self.content[self.content_idx].selection_reversed {
+            self.content[self.content_idx].selected_range.start
         } else {
-            self.selected_range.end
+            self.content[self.content_idx].selected_range.end
         }
     }
 
@@ -239,25 +246,32 @@ impl TextInput {
         let mut y = ((position.y.0 + 4.) / 14. - 1.).floor() as usize;
         y = y.min(self.content.len() - 1);
 
-        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
-        else {
+        let (Some(bounds), Some(line)) = (
+            self.content[self.content_idx].last_bounds.as_ref(),
+            self.content[self.content_idx].last_layout.as_ref(),
+        ) else {
             return (0, y);
         };
 
         let mut x = line.closest_index_for_x(position.x - bounds.left());
-        x = x.min(self.content[y].len());
+        x = x.min(self.content[y].content.len());
         (x, y)
     }
 
     fn select_to(&mut self, x_offset: usize, _y_offset: usize, cx: &mut ViewContext<Self>) {
-        if self.selection_reversed {
-            self.selected_range.start = x_offset
+        if self.content[self.content_idx].selection_reversed {
+            self.content[self.content_idx].selected_range.start = x_offset
         } else {
-            self.selected_range.end = x_offset
+            self.content[self.content_idx].selected_range.end = x_offset
         };
-        if self.selected_range.end < self.selected_range.start {
-            self.selection_reversed = !self.selection_reversed;
-            self.selected_range = self.selected_range.end..self.selected_range.start;
+        if self.content[self.content_idx].selected_range.end
+            < self.content[self.content_idx].selected_range.start
+        {
+            self.content[self.content_idx].selection_reversed =
+                !self.content[self.content_idx].selection_reversed;
+            self.content[self.content_idx].selected_range =
+                self.content[self.content_idx].selected_range.end
+                    ..self.content[self.content_idx].selected_range.start;
         }
         cx.notify()
     }
@@ -266,7 +280,7 @@ impl TextInput {
         let mut utf8_offset = 0;
         let mut utf16_count = 0;
 
-        for ch in self.content[self.content_idx].chars() {
+        for ch in self.content[self.content_idx].content.chars() {
             if utf16_count >= offset {
                 break;
             }
@@ -281,7 +295,7 @@ impl TextInput {
         let mut utf16_offset = 0;
         let mut utf8_count = 0;
 
-        for ch in self.content[self.content_idx].chars() {
+        for ch in self.content[self.content_idx].content.chars() {
             if utf8_count >= offset {
                 break;
             }
@@ -302,6 +316,7 @@ impl TextInput {
 
     fn previous_boundary(&self, offset: usize) -> usize {
         self.content[self.content_idx]
+            .content
             .grapheme_indices(true)
             .rev()
             .find_map(|(idx, _)| (idx < offset).then_some(idx))
@@ -310,9 +325,10 @@ impl TextInput {
 
     fn next_boundary(&self, offset: usize) -> usize {
         self.content[self.content_idx]
+            .content
             .grapheme_indices(true)
             .find_map(|(idx, _)| (idx > offset).then_some(idx))
-            .unwrap_or(self.content[self.content_idx].len())
+            .unwrap_or(self.content[self.content_idx].content.len())
     }
 
     fn add_word_to_start_of_line(&mut self, word: &str, line: usize, cx: &mut ViewContext<Self>) {
@@ -320,13 +336,13 @@ impl TextInput {
             self.new_line("".into(), cx);
         }
 
-        let new_content = if self.content[line].len() > 0 {
-            word.to_owned() + " " + &self.content[line]
+        let new_content = if self.content[line].content.len() > 0 {
+            word.to_owned() + " " + &self.content[line].content
         } else {
-            word.to_owned() + &self.content[line]
+            word.to_owned() + &self.content[line].content
         };
 
-        self.content[line] = new_content.into();
+        self.content[line].content = new_content.into();
     }
 
     fn replace_text_in_range_without_moving(
@@ -338,32 +354,35 @@ impl TextInput {
         let range = range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
+            .or(self.content[self.content_idx].marked_range.clone())
+            .unwrap_or(self.content[self.content_idx].selected_range.clone());
 
-        self.content[self.content_idx] = (self.content[self.content_idx][0..range.start]
-            .to_owned()
-            + new_text
-            + &self.content[self.content_idx][range.end..])
-            .into();
-        self.marked_range.take();
+        //self.content[self.content_idx] = (self.content[self.content_idx].content[0..range.start]
+        //    .to_owned()
+        //    + new_text
+        //    + &self.content[self.content_idx].content[range.end..])
+        //    .into();
+        self.content[self.content_idx].marked_range.take();
         cx.notify();
     }
 
     fn check_bounds(&mut self, cx: &mut ViewContext<Self>) {
-        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
-        else {
+        let (Some(bounds), Some(line)) = (
+            self.content[self.content_idx].last_bounds.as_ref(),
+            self.content[self.content_idx].last_layout.as_ref(),
+        ) else {
             return;
         };
 
-        let pixels =
-            line.x_for_index(self.content[self.content_idx].len()) + bounds.left() + bounds.right();
+        let pixels = line.x_for_index(self.content[self.content_idx].content.len())
+            + bounds.left()
+            + bounds.right();
         let width = cx.window_bounds().get_bounds().right()
             - cx.window_bounds().get_bounds().left()
             - bounds.right();
 
         if pixels >= width {
-            let content_string = self.content[self.content_idx].to_string();
+            let content_string = self.content[self.content_idx].content.to_string();
             let content = content_string.split(" ");
 
             if content.clone().count() > 1 {
@@ -376,10 +395,14 @@ impl TextInput {
                     cx,
                 );
 
-                if self.selected_range.start >= content_string.len() - last_word.len() {
+                if self.content[self.content_idx].selected_range.start
+                    >= content_string.len() - last_word.len()
+                {
                     self.content_idx += 1;
-                    let pos = last_word.len() - (content_string.len() - self.selected_range.start);
-                    self.selected_range = pos..pos;
+                    let pos = last_word.len()
+                        - (content_string.len()
+                            - self.content[self.content_idx].selected_range.start);
+                    self.content[self.content_idx].selected_range = pos..pos;
                 }
                 return;
             }
@@ -401,7 +424,7 @@ impl ViewInputHandler for TextInput {
         _cx: &mut ViewContext<Self>,
     ) -> Option<String> {
         let range = self.range_from_utf16(&range_utf16);
-        Some(self.content[self.content_idx][range].to_string())
+        Some(self.content[self.content_idx].content[range].to_string())
     }
 
     fn selected_text_range(
@@ -410,19 +433,20 @@ impl ViewInputHandler for TextInput {
         _cx: &mut ViewContext<Self>,
     ) -> Option<UTF16Selection> {
         Some(UTF16Selection {
-            range: self.range_to_utf16(&self.selected_range),
-            reversed: self.selection_reversed,
+            range: self.range_to_utf16(&self.content[self.content_idx].selected_range),
+            reversed: self.content[self.content_idx].selection_reversed,
         })
     }
 
     fn marked_text_range(&self, _cx: &mut ViewContext<Self>) -> Option<Range<usize>> {
-        self.marked_range
+        self.content[self.content_idx]
+            .marked_range
             .as_ref()
             .map(|range| self.range_to_utf16(range))
     }
 
     fn unmark_text(&mut self, _cx: &mut ViewContext<Self>) {
-        self.marked_range = None;
+        self.content[self.content_idx].marked_range = None;
     }
 
     fn replace_text_in_range(
@@ -434,16 +458,17 @@ impl ViewInputHandler for TextInput {
         let range = range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
+            .or(self.content[self.content_idx].marked_range.clone())
+            .unwrap_or(self.content[self.content_idx].selected_range.clone());
 
-        self.content[self.content_idx] = (self.content[self.content_idx][0..range.start]
-            .to_owned()
-            + new_text
-            + &self.content[self.content_idx][range.end..])
-            .into();
-        self.selected_range = range.start + new_text.len()..range.start + new_text.len();
-        self.marked_range.take();
+        //self.content[self.content_idx] = (self.content[self.content_idx].content[0..range.start]
+        //    .to_owned()
+        //    + new_text
+        //    + &self.content[self.content_idx].content[range.end..])
+        //    .into();
+        self.content[self.content_idx].selected_range =
+            range.start + new_text.len()..range.start + new_text.len();
+        self.content[self.content_idx].marked_range.take();
 
         self.check_bounds(cx);
 
@@ -460,16 +485,17 @@ impl ViewInputHandler for TextInput {
         let range = range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
+            .or(self.content[self.content_idx].marked_range.clone())
+            .unwrap_or(self.content[self.content_idx].selected_range.clone());
 
-        self.content[self.content_idx] = (self.content[self.content_idx][0..range.start]
-            .to_owned()
-            + new_text
-            + &self.content[self.content_idx][range.end..])
-            .into();
-        self.marked_range = Some(range.start..range.start + new_text.len());
-        self.selected_range = new_selected_range_utf16
+        //self.content[self.content_idx] = (self.content[self.content_idx].content[0..range.start]
+        //    .to_owned()
+        //    + new_text
+        //    + &self.content[self.content_idx].content[range.end..])
+        //    .into();
+        self.content[self.content_idx].marked_range =
+            Some(range.start..range.start + new_text.len());
+        self.content[self.content_idx].selected_range = new_selected_range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
             .map(|new_range| new_range.start + range.start..new_range.end + range.end)
@@ -484,7 +510,7 @@ impl ViewInputHandler for TextInput {
         bounds: Bounds<Pixels>,
         _cx: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {
-        let last_layout = self.last_layout.as_ref()?;
+        let last_layout = self.content[self.content_idx].last_layout.as_ref()?;
         let range = self.range_from_utf16(&range_utf16);
         Some(Bounds::from_corners(
             point(
@@ -528,7 +554,6 @@ impl Render for TextInput {
             .children(self.content.iter().enumerate().map(|(i, _)| {
                 div().pt(px(14. * i as f32)).child(TextElement {
                     input: cx.view().clone(),
-                    index: i,
                 })
             }))
     }

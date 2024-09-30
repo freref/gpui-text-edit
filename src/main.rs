@@ -5,6 +5,7 @@ mod text_input;
 use gpui::*;
 use input_example::InputExample;
 use text_input::TextInput;
+use text_input::TextLine;
 use text_input::{
     Backspace, Delete, Down, End, Enter, Home, Left, Right, SelectAll, SelectLeft, SelectRight,
     ShowCharacterPalette, Up,
@@ -43,14 +44,16 @@ fn main() {
                 |cx| {
                     let text_input = cx.new_view(|cx| TextInput {
                         focus_handle: cx.focus_handle(),
-                        content: vec!["".into()],
+                        content: vec![TextLine {
+                            content: "".into(),
+                            selected_range: 0..0,
+                            selection_reversed: false,
+                            marked_range: None,
+                            last_layout: None,
+                            last_bounds: None,
+                            is_selecting: false,
+                        }],
                         content_idx: 0,
-                        selected_range: 0..0,
-                        selection_reversed: false,
-                        marked_range: None,
-                        last_layout: None,
-                        last_bounds: None,
-                        is_selecting: false,
                     });
                     cx.new_view(|cx| InputExample {
                         text_input,
