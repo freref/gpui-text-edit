@@ -182,15 +182,13 @@ impl TextInput {
     }
 
     pub fn enter(&mut self, _: &Enter, cx: &mut ViewContext<Self>) {
-        //let leftovers = if self.content[self.content_idx].content.len() > 0 {
-        //    self.content[self.content_idx]
-        //        [self.cursor_offset()..self.content[self.content_idx].len()]
-        //        .to_string()
-        //} else {
-        //    "".to_string()
-        //};
-
-        let leftovers = "".to_string();
+        let leftovers = if self.content[self.content_idx].content.len() > 0 {
+            self.content[self.content_idx].content
+                [self.cursor_offset()..self.content[self.content_idx].content.len()]
+                .to_string()
+        } else {
+            "".to_string()
+        };
 
         let new_content =
             self.content[self.content_idx].content[..self.cursor_offset()].to_string();
@@ -202,7 +200,18 @@ impl TextInput {
     }
 
     pub fn new_line(&mut self, data: String, _cx: &mut ViewContext<Self>) {
-        //self.content.insert(self.content_idx + 1, data.into());
+        self.content.insert(
+            self.content_idx + 1,
+            TextLine {
+                content: data.into(),
+                selected_range: 0..0,
+                selection_reversed: false,
+                marked_range: None,
+                last_layout: None,
+                last_bounds: None,
+                is_selecting: false,
+            },
+        );
     }
 
     fn move_x(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
@@ -357,11 +366,11 @@ impl TextInput {
             .or(self.content[self.content_idx].marked_range.clone())
             .unwrap_or(self.content[self.content_idx].selected_range.clone());
 
-        //self.content[self.content_idx] = (self.content[self.content_idx].content[0..range.start]
-        //    .to_owned()
-        //    + new_text
-        //    + &self.content[self.content_idx].content[range.end..])
-        //    .into();
+        self.content[self.content_idx].content =
+            (self.content[self.content_idx].content[0..range.start].to_owned()
+                + new_text
+                + &self.content[self.content_idx].content[range.end..])
+                .into();
         self.content[self.content_idx].marked_range.take();
         cx.notify();
     }
@@ -461,11 +470,11 @@ impl ViewInputHandler for TextInput {
             .or(self.content[self.content_idx].marked_range.clone())
             .unwrap_or(self.content[self.content_idx].selected_range.clone());
 
-        //self.content[self.content_idx] = (self.content[self.content_idx].content[0..range.start]
-        //    .to_owned()
-        //    + new_text
-        //    + &self.content[self.content_idx].content[range.end..])
-        //    .into();
+        self.content[self.content_idx].content =
+            (self.content[self.content_idx].content[0..range.start].to_owned()
+                + new_text
+                + &self.content[self.content_idx].content[range.end..])
+                .into();
         self.content[self.content_idx].selected_range =
             range.start + new_text.len()..range.start + new_text.len();
         self.content[self.content_idx].marked_range.take();
@@ -488,11 +497,11 @@ impl ViewInputHandler for TextInput {
             .or(self.content[self.content_idx].marked_range.clone())
             .unwrap_or(self.content[self.content_idx].selected_range.clone());
 
-        //self.content[self.content_idx] = (self.content[self.content_idx].content[0..range.start]
-        //    .to_owned()
-        //    + new_text
-        //    + &self.content[self.content_idx].content[range.end..])
-        //    .into();
+        self.content[self.content_idx].content =
+            (self.content[self.content_idx].content[0..range.start].to_owned()
+                + new_text
+                + &self.content[self.content_idx].content[range.end..])
+                .into();
         self.content[self.content_idx].marked_range =
             Some(range.start..range.start + new_text.len());
         self.content[self.content_idx].selected_range = new_selected_range_utf16
@@ -554,6 +563,7 @@ impl Render for TextInput {
             .children(self.content.iter().enumerate().map(|(i, _)| {
                 div().pt(px(14. * i as f32)).child(TextElement {
                     input: cx.view().clone(),
+                    index: i,
                 })
             }))
     }

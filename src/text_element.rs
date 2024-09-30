@@ -3,6 +3,7 @@ use gpui::*;
 
 pub struct TextElement {
     pub input: View<TextInput>,
+    pub index: usize,
 }
 
 impl IntoElement for TextElement {
@@ -47,8 +48,8 @@ impl Element for TextElement {
         cx: &mut WindowContext,
     ) -> Self::PrepaintState {
         let input = self.input.read(cx);
-        let content = input.content[input.content_idx].content.clone();
-        let selected_range = input.content[input.content_idx].selected_range.clone();
+        let content = input.content[self.index].content.clone();
+        let selected_range = input.content[self.index].selected_range.clone();
         let cursor = input.cursor_offset();
         let style = cx.text_style();
 
@@ -62,33 +63,32 @@ impl Element for TextElement {
             underline: None,
             strikethrough: None,
         };
-        let runs =
-            if let Some(marked_range) = input.content[input.content_idx].marked_range.as_ref() {
-                vec![
-                    TextRun {
-                        len: marked_range.start,
-                        ..run.clone()
-                    },
-                    TextRun {
-                        len: marked_range.end - marked_range.start,
-                        underline: Some(UnderlineStyle {
-                            color: Some(run.color),
-                            thickness: px(1.0),
-                            wavy: false,
-                        }),
-                        ..run.clone()
-                    },
-                    TextRun {
-                        len: display_text.len() - marked_range.end,
-                        ..run.clone()
-                    },
-                ]
-                .into_iter()
-                .filter(|run| run.len > 0)
-                .collect()
-            } else {
-                vec![run]
-            };
+        let runs = if let Some(marked_range) = input.content[self.index].marked_range.as_ref() {
+            vec![
+                TextRun {
+                    len: marked_range.start,
+                    ..run.clone()
+                },
+                TextRun {
+                    len: marked_range.end - marked_range.start,
+                    underline: Some(UnderlineStyle {
+                        color: Some(run.color),
+                        thickness: px(1.0),
+                        wavy: false,
+                    }),
+                    ..run.clone()
+                },
+                TextRun {
+                    len: display_text.len() - marked_range.end,
+                    ..run.clone()
+                },
+            ]
+            .into_iter()
+            .filter(|run| run.len > 0)
+            .collect()
+        } else {
+            vec![run]
+        };
 
         let font_size = style.font_size.to_pixels(cx.rem_size());
         let line = cx
@@ -97,7 +97,7 @@ impl Element for TextElement {
             .unwrap();
 
         let cursor_pos = line.x_for_index(cursor);
-        let (selection, cursor) = if selected_range.is_empty() {
+        let (selection, cursor) = if selected_range.is_empty() && self.index == input.content_idx {
             (
                 None,
                 Some(fill(
@@ -107,6 +107,23 @@ impl Element for TextElement {
                     ),
                     gpui::blue(),
                 )),
+            )
+        } else if self.index == input.content_idx {
+            (
+                Some(fill(
+                    Bounds::from_corners(
+                        point(
+                            bounds.left() + line.x_for_index(selected_range.start),
+                            bounds.top(),
+                        ),
+                        point(
+                            bounds.left() + line.x_for_index(selected_range.end),
+                            bounds.bottom(),
+                        ),
+                    ),
+                    rgba(0x3311FF30),
+                )),
+                None,
             )
         } else {
             (None, None)
@@ -142,6 +159,7 @@ impl Element for TextElement {
                 cx.paint_quad(cursor);
             }
         }
+        let input = self.input.read(cx);
 
         self.input.update(cx, |input, _cx| {
             input.content[input.content_idx].last_layout = Some(line);
