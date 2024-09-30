@@ -159,11 +159,10 @@ impl Element for TextElement {
                 cx.paint_quad(cursor);
             }
         }
-        let input = self.input.read(cx);
 
         self.input.update(cx, |input, _cx| {
-            input.content[input.content_idx].last_layout = Some(line);
-            input.content[input.content_idx].last_bounds = Some(bounds);
+            input.content[self.index].last_layout = Some(line);
+            input.content[self.index].last_bounds = Some(bounds);
         });
     }
 }
