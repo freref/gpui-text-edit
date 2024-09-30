@@ -28,7 +28,6 @@ pub struct TextLine {
     pub selection_reversed: bool,
     pub marked_range: Option<Range<usize>>,
     pub last_layout: Option<ShapedLine>,
-    pub last_bounds: Option<Bounds<Pixels>>,
     pub is_selecting: bool,
 }
 
@@ -36,6 +35,7 @@ pub struct TextInput {
     pub focus_handle: FocusHandle,
     pub content: Vec<TextLine>,
     pub content_idx: usize,
+    pub last_bounds: Option<Bounds<Pixels>>,
 }
 
 impl TextInput {
@@ -123,7 +123,9 @@ impl TextInput {
 
                 self.content.remove(self.content_idx);
 
-                self.move_up(cx)
+                self.move_up(cx);
+                let content_len = self.content[self.content_idx].content.len();
+                self.content[self.content_idx].selected_range = content_len..content_len;
             } else {
                 self.select_to(
                     self.previous_boundary(self.cursor_offset()),
@@ -193,22 +195,21 @@ impl TextInput {
         let new_content =
             self.content[self.content_idx].content[..self.cursor_offset()].to_string();
         self.content[self.content_idx].content = new_content.into();
-        self.new_line(leftovers, cx);
+        self.new_line(leftovers, self.content_idx + 1, cx);
 
         self.move_down(cx);
         self.cursor_to_start(cx);
     }
 
-    pub fn new_line(&mut self, data: String, _cx: &mut ViewContext<Self>) {
+    pub fn new_line(&mut self, data: String, index: usize, _cx: &mut ViewContext<Self>) {
         self.content.insert(
-            self.content_idx + 1,
+            index,
             TextLine {
                 content: data.into(),
                 selected_range: 0..0,
                 selection_reversed: false,
                 marked_range: None,
                 last_layout: None,
-                last_bounds: None,
                 is_selecting: false,
             },
         );
@@ -256,7 +257,7 @@ impl TextInput {
         y = y.min(self.content.len() - 1);
 
         let (Some(bounds), Some(line)) = (
-            self.content[self.content_idx].last_bounds.as_ref(),
+            self.last_bounds.as_ref(),
             self.content[self.content_idx].last_layout.as_ref(),
         ) else {
             return (0, y);
@@ -340,82 +341,149 @@ impl TextInput {
             .unwrap_or(self.content[self.content_idx].content.len())
     }
 
-    fn add_word_to_start_of_line(&mut self, word: &str, line: usize, cx: &mut ViewContext<Self>) {
-        if self.content.len() <= line {
-            self.new_line("".into(), cx);
+    fn add_word_to_start_of_line(&mut self, word: &str, index: usize, cx: &mut ViewContext<Self>) {
+        if self.content.len() <= index {
+            self.new_line("".into(), index, cx);
         }
 
-        let new_content = if self.content[line].content.len() > 0 {
-            word.to_owned() + " " + &self.content[line].content
+        let new_content = if self.content[index].content.len() > 0 {
+            word.to_owned() + " " + &self.content[index].content
         } else {
-            word.to_owned() + &self.content[line].content
+            word.to_owned() + &self.content[index].content
         };
 
-        self.content[line].content = new_content.into();
+        self.content[index].content = new_content.into();
+
+        self.update_layout(index, cx);
+        self.check_bounds(index, cx);
+
+        cx.notify();
     }
 
     fn replace_text_in_range_without_moving(
         &mut self,
         range_utf16: Option<Range<usize>>,
+        index: usize,
         new_text: &str,
         cx: &mut ViewContext<Self>,
     ) {
         let range = range_utf16
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.content[self.content_idx].marked_range.clone())
-            .unwrap_or(self.content[self.content_idx].selected_range.clone());
+            .or(self.content[index].marked_range.clone())
+            .unwrap_or(self.content[index].selected_range.clone());
 
-        self.content[self.content_idx].content =
-            (self.content[self.content_idx].content[0..range.start].to_owned()
-                + new_text
-                + &self.content[self.content_idx].content[range.end..])
-                .into();
-        self.content[self.content_idx].marked_range.take();
+        self.content[index].content = (self.content[index].content[0..range.start].to_owned()
+            + new_text
+            + &self.content[index].content[range.end..])
+            .into();
+        self.content[index].marked_range.take();
         cx.notify();
     }
 
-    fn check_bounds(&mut self, cx: &mut ViewContext<Self>) {
-        let (Some(bounds), Some(line)) = (
-            self.content[self.content_idx].last_bounds.as_ref(),
-            self.content[self.content_idx].last_layout.as_ref(),
+    pub fn update_layout(&mut self, index: usize, cx: &mut ViewContext<Self>) {
+        let content = self.content[index].content.clone();
+        let style = cx.text_style();
+
+        let (display_text, text_color) = (content.clone(), style.color);
+
+        let run = TextRun {
+            len: display_text.len(),
+            font: style.font(),
+            color: text_color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+
+        let runs = if let Some(marked_range) = self.content[index].marked_range.as_ref() {
+            vec![
+                TextRun {
+                    len: marked_range.start,
+                    ..run.clone()
+                },
+                TextRun {
+                    len: marked_range.end - marked_range.start,
+                    underline: Some(UnderlineStyle {
+                        color: Some(run.color),
+                        thickness: px(1.0),
+                        wavy: false,
+                    }),
+                    ..run.clone()
+                },
+                TextRun {
+                    len: display_text.len() - marked_range.end,
+                    ..run.clone()
+                },
+            ]
+            .into_iter()
+            .filter(|run| run.len > 0)
+            .collect()
+        } else {
+            vec![run]
+        };
+
+        let font_size = style.font_size.to_pixels(cx.rem_size());
+        let line = cx
+            .text_system()
+            .shape_line(display_text, font_size, &runs)
+            .unwrap();
+
+        self.content[index].last_layout = Some(line);
+    }
+
+    fn check_bounds(&mut self, index: usize, cx: &mut ViewContext<Self>) {
+        let (Some(bounds), Some(layout)) = (
+            self.last_bounds.as_ref(),
+            self.content[index].last_layout.as_ref(),
         ) else {
             return;
         };
 
-        let pixels = line.x_for_index(self.content[self.content_idx].content.len())
-            + bounds.left()
-            + bounds.right();
+        let pixels =
+            layout.x_for_index(self.content[index].content.len()) + bounds.left() + bounds.right();
         let width = cx.window_bounds().get_bounds().right()
             - cx.window_bounds().get_bounds().left()
-            - bounds.right();
+            - bounds.right()
+            - bounds.left();
 
         if pixels >= width {
-            let content_string = self.content[self.content_idx].content.to_string();
-            let content = content_string.split(" ");
+            let content_string = self.content[index].content.to_string();
+            let mut last_index = layout.closest_index_for_x(width);
 
-            if content.clone().count() > 1 {
-                let last_word = content.last().unwrap();
+            while last_index > 0 && !content_string[last_index..].starts_with(' ') {
+                last_index -= 1;
+            }
 
-                self.add_word_to_start_of_line(last_word, self.content_idx + 1, cx);
-                self.replace_text_in_range_without_moving(
-                    Some(content_string.len() - last_word.len() - 1..content_string.len()),
-                    "",
-                    cx,
-                );
-
-                if self.content[self.content_idx].selected_range.start
-                    >= content_string.len() - last_word.len()
-                {
-                    self.content_idx += 1;
-                    let pos = last_word.len();
-                    //    - (content_string.len()
-                    //        - self.content[self.content_idx].selected_range.start);
-                    self.content[self.content_idx].selected_range = pos..pos;
-                }
+            if last_index == 0 {
+                self.enter(&Enter, cx);
                 return;
             }
-            self.enter(&Enter, cx)
+
+            if last_index > 0 {
+                last_index += 1;
+            }
+
+            let len = content_string.len() - last_index;
+            let leftovers = &content_string[last_index..content_string.len()];
+
+            println!("{}", leftovers);
+
+            self.new_line(leftovers.into(), index + 1, cx);
+            self.replace_text_in_range_without_moving(
+                Some(last_index..content_string.len()),
+                index,
+                "",
+                cx,
+            );
+
+            if self.content[index].selected_range.start >= content_string.len() - len
+                && index == self.content_idx
+            {
+                self.content_idx += 1;
+                let pos = len;
+                self.content[index + 1].selected_range = pos..pos;
+            }
         }
     }
 }
@@ -479,7 +547,7 @@ impl ViewInputHandler for TextInput {
             range.start + new_text.len()..range.start + new_text.len();
         self.content[self.content_idx].marked_range.take();
 
-        self.check_bounds(cx);
+        self.check_bounds(self.content_idx, cx);
 
         cx.notify();
     }
@@ -560,7 +628,7 @@ impl Render for TextInput {
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .text_size(px(12.))
-            .children(self.content.iter().enumerate().map(|(i, _)| {
+            .children((0..self.content.len()).map(|i| {
                 div().pt(px(14. * i as f32)).child(TextElement {
                     input: cx.view().clone(),
                     index: i,

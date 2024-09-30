@@ -50,10 +50,10 @@ fn main() {
                             selection_reversed: false,
                             marked_range: None,
                             last_layout: None,
-                            last_bounds: None,
                             is_selecting: false,
                         }],
                         content_idx: 0,
+                        last_bounds: None,
                     });
                     cx.new_view(|cx| InputExample {
                         text_input,
