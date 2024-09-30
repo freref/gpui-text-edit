@@ -464,8 +464,6 @@ impl TextInput {
             let len = content_string.len() - last_index;
             let leftovers = &content_string[last_index..content_string.len()];
 
-            println!("{}", leftovers);
-
             self.add_word_to_start_of_line(leftovers, index + 1, cx);
             self.replace_text_in_range_without_moving(
                 Some(last_index - 1..content_string.len()),
