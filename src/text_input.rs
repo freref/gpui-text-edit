@@ -244,7 +244,7 @@ impl TextInput {
             return (0, y);
         };
 
-        let mut x = (line.closest_index_for_x(position.x - bounds.left()));
+        let mut x = line.closest_index_for_x(position.x - bounds.left());
         x = x.min(self.content[y].len());
         (x, y)
     }
