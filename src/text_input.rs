@@ -408,9 +408,9 @@ impl TextInput {
                     >= content_string.len() - last_word.len()
                 {
                     self.content_idx += 1;
-                    let pos = last_word.len()
-                        - (content_string.len()
-                            - self.content[self.content_idx].selected_range.start);
+                    let pos = last_word.len();
+                    //    - (content_string.len()
+                    //        - self.content[self.content_idx].selected_range.start);
                     self.content[self.content_idx].selected_range = pos..pos;
                 }
                 return;
