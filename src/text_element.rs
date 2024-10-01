@@ -163,6 +163,7 @@ impl Element for TextElement {
         self.input.update(cx, |input, _cx| {
             input.content[self.index].last_layout = Some(line);
             input.last_bounds = Some(bounds);
+            input.check_bounds(self.index, _cx);
         });
     }
 }

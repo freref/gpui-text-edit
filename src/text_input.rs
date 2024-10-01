@@ -341,7 +341,12 @@ impl TextInput {
             .unwrap_or(self.content[self.content_idx].content.len())
     }
 
-    fn add_word_to_start_of_line(&mut self, word: &str, index: usize, cx: &mut ViewContext<Self>) {
+    pub fn add_word_to_start_of_line(
+        &mut self,
+        word: &str,
+        index: usize,
+        cx: &mut ViewContext<Self>,
+    ) {
         if self.content.len() <= index {
             self.new_line("".into(), index, cx);
         }
@@ -353,83 +358,21 @@ impl TextInput {
         };
 
         self.content[index].content = new_content.into();
-
-        cx.notify();
     }
 
-    fn replace_text_in_range_without_moving(
+    pub fn remove_text_in_range_without_moving(
         &mut self,
-        range_utf16: Option<Range<usize>>,
+        start: usize,
+        end: usize,
         index: usize,
-        new_text: &str,
-        cx: &mut ViewContext<Self>,
+        _cx: &mut ViewContext<Self>,
     ) {
-        let range = range_utf16
-            .as_ref()
-            .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.content[index].marked_range.clone())
-            .unwrap_or(self.content[index].selected_range.clone());
-
-        self.content[index].content = (self.content[index].content[0..range.start].to_owned()
-            + new_text
-            + &self.content[index].content[range.end..])
+        self.content[index].content = (self.content[index].content[0..start].to_owned()
+            + &self.content[index].content[end..])
             .into();
-        self.content[index].marked_range.take();
-        cx.notify();
     }
 
-    pub fn update_layout(&mut self, index: usize, cx: &mut ViewContext<Self>) {
-        let content = self.content[index].content.clone();
-        let style = cx.text_style();
-
-        let (display_text, text_color) = (content.clone(), style.color);
-
-        let run = TextRun {
-            len: display_text.len(),
-            font: style.font(),
-            color: text_color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        };
-
-        let runs = if let Some(marked_range) = self.content[index].marked_range.as_ref() {
-            vec![
-                TextRun {
-                    len: marked_range.start,
-                    ..run.clone()
-                },
-                TextRun {
-                    len: marked_range.end - marked_range.start,
-                    underline: Some(UnderlineStyle {
-                        color: Some(run.color),
-                        thickness: px(1.0),
-                        wavy: false,
-                    }),
-                    ..run.clone()
-                },
-                TextRun {
-                    len: display_text.len() - marked_range.end,
-                    ..run.clone()
-                },
-            ]
-            .into_iter()
-            .filter(|run| run.len > 0)
-            .collect()
-        } else {
-            vec![run]
-        };
-
-        let font_size = style.font_size.to_pixels(cx.rem_size());
-        let line = cx
-            .text_system()
-            .shape_line(display_text, font_size, &runs)
-            .unwrap();
-
-        self.content[index].last_layout = Some(line);
-    }
-
-    fn check_bounds(&mut self, index: usize, cx: &mut ViewContext<Self>) {
+    pub fn check_bounds(&mut self, index: usize, cx: &mut ViewContext<Self>) {
         let (Some(bounds), Some(layout)) = (
             self.last_bounds.as_ref(),
             self.content[index].last_layout.as_ref(),
@@ -446,6 +389,7 @@ impl TextInput {
 
         if pixels >= width {
             let content_string = self.content[index].content.to_string();
+            let content_string_len = content_string.len();
             let mut last_index = layout.closest_index_for_x(width);
 
             while last_index > 0 && !content_string[last_index..].starts_with(' ') {
@@ -461,25 +405,21 @@ impl TextInput {
                 last_index += 1;
             }
 
-            let len = content_string.len() - last_index;
-            let leftovers = &content_string[last_index..content_string.len()];
+            let last_index = last_index;
+
+            let len = content_string_len - last_index;
+            let leftovers = &content_string[last_index..content_string_len];
 
             self.add_word_to_start_of_line(leftovers, index + 1, cx);
-            self.replace_text_in_range_without_moving(
-                Some(last_index - 1..content_string.len()),
-                index,
-                "",
-                cx,
-            );
+            self.remove_text_in_range_without_moving(last_index - 1, content_string_len, index, cx);
 
-            if self.content[index].selected_range.start >= content_string.len() - len
+            if self.content[index].selected_range.start >= content_string_len - len
                 && index == self.content_idx
             {
                 self.content_idx += 1;
                 let pos = len;
                 self.content[self.content_idx].selected_range = pos..pos;
             }
-
             self.check_bounds(index + 1, cx);
         }
     }
@@ -544,8 +484,7 @@ impl ViewInputHandler for TextInput {
             range.start + new_text.len()..range.start + new_text.len();
         self.content[self.content_idx].marked_range.take();
 
-        self.check_bounds(self.content_idx, cx);
-
+        //self.check_bounds(self.content_idx, cx);
         cx.notify();
     }
 
